@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Local URL pattern analysis and scan history dashboard.">
+  <title>Digital Risk Protection Platform</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="{{ url_for('index') }}" aria-label="Digital Risk Protection home">
+        <span class="brand-mark" aria-hidden="true">D</span>
+        <span>
+          <strong>Digital Risk</strong>
+          <small>Protection Platform</small>
+        </span>
+      </a>
+      <p class="nav-label">Workspace</p>
+      <nav aria-label="Main navigation">
+        <a class="nav-link active" href="#dashboard"><span class="nav-icon" aria-hidden="true">◫</span>Dashboard</a>
+        <a class="nav-link" href="#scanner"><span class="nav-icon" aria-hidden="true">⌕</span>URL scanner</a>
+        <a class="nav-link" href="#history"><span class="nav-icon" aria-hidden="true">◷</span>Scan history</a>
+      </nav>
+      <div class="sidebar-note">
+        <strong>Starter mode</strong>
+        <p>Local pattern checks only. No external reputation service is connected.</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar" id="dashboard">
+        <div>
+          <p class="eyebrow">Overview / URL intelligence</p>
+          <h1>Digital Risk Dashboard</h1>
+          <p class="subtitle">Review URL patterns and recent local scans from one workspace.</p>
+        </div>
+        <span class="status-chip">Local scanner active</span>
+      </header>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}" role="status">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <section class="stats" aria-label="Scan summary">
+        <article class="stat-card">
+          <div class="stat-top"><span>Total scans</span><span class="stat-icon" aria-hidden="true">⌕</span></div>
+          <strong class="stat-value">{{ dashboard.total }}</strong>
+          <div class="stat-foot">Saved in local scan history</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-top"><span>Elevated patterns</span><span class="stat-icon" aria-hidden="true">!</span></div>
+          <strong class="stat-value">{{ dashboard.elevated }}</strong>
+          <div class="stat-foot">Medium or high heuristic score</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-top"><span>Low signals</span><span class="stat-icon" aria-hidden="true">↘</span></div>
+          <strong class="stat-value">{{ dashboard.low }}</strong>
+          <div class="stat-foot">Not a verified safe result</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-top"><span>External reputation</span><span class="stat-icon" aria-hidden="true">◇</span></div>
+          <strong class="stat-value">N/A</strong>
+          <div class="stat-foot">Not checked in this starter</div>
+        </article>
+      </section>
+
+      <div class="content-grid">
+        <section class="panel" id="scanner">
+          <div class="panel-heading">
+            <div>
+              <h2>Phishing URL scanner</h2>
+              <p>Check a URL for a small set of suspicious structural patterns.</p>
+            </div>
+            <span class="panel-tag">Heuristic only</span>
+          </div>
+
+          <form action="{{ url_for('scan') }}" method="post">
+            <label class="field-label" for="url">Website URL</label>
+            <input
+              class="url-input"
+              id="url"
+              name="url"
+              type="url"
+              placeholder="https://example.com/login"
+              maxlength="2048"
+              autocomplete="url"
+              required
+            >
+            <p class="form-hint">Include the full address, starting with http:// or https://. The URL is analyzed locally and is not opened or submitted to an external service.</p>
+            <button class="scan-button" type="submit"><span aria-hidden="true">⌕</span> Analyze URL</button>
+          </form>
+
+          <div class="notice">
+            A low score is not proof a website is safe. This version does not query threat-intelligence APIs or follow redirects.
+          </div>
+
+          {% if selected_scan %}
+            <section class="result" id="result" aria-labelledby="result-title">
+              <div class="panel-heading">
+                <div>
+                  <h2 id="result-title">Analysis result</h2>
+                  <p>Scan #{{ selected_scan.id }} · {{ selected_scan.scanned_at[:16].replace("T", " ") }} UTC</p>
+                </div>
+              </div>
+              <div class="result-box">
+                <div class="result-top">
+                  <span class="risk-badge risk-{{ selected_scan.risk_level|lower }}">{{ selected_scan.risk_level }} pattern risk</span>
+                  <span class="risk-score">Heuristic score: {{ selected_scan.risk_score }}/100</span>
+                </div>
+                <p class="result-url">{{ selected_scan.url }}</p>
+                <p class="evidence-title">Observed evidence</p>
+                <ul class="evidence-list">
+                  {% for item in selected_scan.evidence %}
+                    <li>{{ item }}</li>
+                  {% endfor %}
+                </ul>
+                <p class="verification">{{ selected_scan.verification_status }} A heuristic result alone does not establish that a site is malicious or safe.</p>
+              </div>
+            </section>
+          {% endif %}
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>How to read this result</h2>
+              <p>Scores summarize matched local URL patterns.</p>
+            </div>
+          </div>
+          <div class="result-box">
+            <p class="evidence-title">Risk bands</p>
+            <ul class="evidence-list">
+              <li><strong>Low (0–24):</strong> few configured patterns matched; not a safety verdict.</li>
+              <li><strong>Medium (25–49):</strong> one or more patterns should be reviewed.</li>
+              <li><strong>High (50–100):</strong> multiple or stronger patterns matched; investigate independently.</li>
+            </ul>
+            <p class="verification">Patterns include non-HTTPS URLs, embedded credentials, IP-address hosts, punycode, long or deeply nested hostnames, and selected URL keywords.</p>
+          </div>
+        </section>
+
+        <section class="panel history-panel" id="history">
+          <div class="panel-heading">
+            <div>
+              <h2>Recent scan history</h2>
+              <p>Latest URL checks saved to the local SQLite database.</p>
+            </div>
+            <span class="panel-tag">{{ dashboard.total }} total</span>
+          </div>
+          {% if dashboard.history %}
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">URL</th>
+                    <th scope="col">Pattern risk</th>
+                    <th scope="col">Score</th>
+                    <th scope="col">Checked (UTC)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for scan in dashboard.history %}
+                    <tr>
+                      <td>
+                        <span class="table-url" title="{{ scan['url'] }}">{{ scan["url"] }}</span>
+                        <span class="table-sub">Local heuristic analysis</span>
+                      </td>
+                      <td><span class="history-risk {{ scan['risk_level'] }}">{{ scan["risk_level"] }}</span></td>
+                      <td>{{ scan["risk_score"] }}/100</td>
+                      <td>{{ scan["scanned_at"][:16].replace("T", " ") }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="empty-state">No scans yet. Submit a URL above to begin your local scan history.</div>
+          {% endif %}
+        </section>
+      </div>
+      <p class="footer-note">Digital Risk Protection Platform · Local starter build · No external threat verdicts</p>
+    </main>
+  </div>
+</body>
+</html>
